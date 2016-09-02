@@ -409,7 +409,7 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
         
         // Capture a JPEG photo with flash set to auto and high resolution photo enabled.
         AVCapturePhotoSettings *photoSettings = [AVCapturePhotoSettings photoSettings];
-        photoSettings.flashMode = AVCaptureFlashModeAuto;
+        photoSettings.flashMode = AVCaptureFlashModeOff;
         photoSettings.highResolutionPhotoEnabled = YES;
         if ( photoSettings.availablePreviewPhotoPixelFormatTypes.count > 0 ) {
             photoSettings.previewPhotoFormat = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : photoSettings.availablePreviewPhotoPixelFormatTypes.firstObject };
