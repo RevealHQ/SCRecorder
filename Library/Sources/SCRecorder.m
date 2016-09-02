@@ -8,9 +8,16 @@
 
 #import "SCRecorder.h"
 #import "SCRecordSession_Internal.h"
+#import "AVCamPhotoCaptureDelegate.h"
+
 #define dispatch_handler(x) if (x != nil) dispatch_async(dispatch_get_main_queue(), x)
 #define kSCRecorderRecordSessionQueueKey "SCRecorderRecordSessionQueue"
 #define kMinTimeBetweenAppend 0.004
+
+typedef NS_ENUM( NSInteger, AVCamLivePhotoMode ) {
+    AVCamLivePhotoModeOn,
+    AVCamLivePhotoModeOff
+};
 
 @interface SCRecorder() {
     AVCaptureVideoPreviewLayer *_previewLayer;
@@ -19,7 +26,7 @@
     AVCaptureVideoDataOutput *_videoOutput;
     AVCaptureMovieFileOutput *_movieOutput;
     AVCaptureAudioDataOutput *_audioOutput;
-    AVCaptureStillImageOutput *_photoOutput;
+    AVCapturePhotoOutput *_photoOutput;
     SCSampleBufferHolder *_lastVideoBuffer;
     SCSampleBufferHolder *_lastAudioBuffer;
     CIContext *_context;
@@ -38,6 +45,10 @@
     SCFilter *_transformFilter;
     size_t _transformFilterBufferWidth;
     size_t _transformFilterBufferHeight;
+    
+    AVCamLivePhotoMode _livePhotoMode;
+    NSMutableDictionary<NSNumber *, AVCamPhotoCaptureDelegate *> *_inProgressPhotoCaptureDelegates;
+    NSInteger _inProgressLivePhotoCapturesCount;
 }
 
 @end
@@ -59,7 +70,7 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
         dispatch_queue_set_specific(_sessionQueue, kSCRecorderRecordSessionQueueKey, "true", nil);
         dispatch_set_target_queue(_sessionQueue, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0));
         
-        _captureSessionPreset = AVCaptureSessionPresetHigh;
+        _captureSessionPreset = AVCaptureSessionPresetPhoto;
         _previewLayer = [[AVCaptureVideoPreviewLayer alloc] init];
         _previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
         _initializeSessionLazily = YES;
@@ -190,9 +201,9 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
     if (session != nil) {
         [self beginConfiguration];
         
-        if (![session.sessionPreset isEqualToString:_captureSessionPreset]) {
-            if ([session canSetSessionPreset:_captureSessionPreset]) {
-                session.sessionPreset = _captureSessionPreset;
+        if (![session.sessionPreset isEqualToString:AVCaptureSessionPresetPhoto]) {
+            if ([session canSetSessionPreset:AVCaptureSessionPresetPhoto]) {
+                session.sessionPreset = AVCaptureSessionPresetPhoto;
             } else {
                 newError = [SCRecorder createError:@"Cannot set session preset"];
             }
@@ -272,13 +283,14 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
         
         if (self.photoConfiguration.enabled) {
             if (_photoOutput == nil) {
-                _photoOutput = [[AVCaptureStillImageOutput alloc] init];
-                _photoOutput.outputSettings = [self.photoConfiguration createOutputSettings];
+                _photoOutput = [[AVCapturePhotoOutput alloc] init];
             }
             
             if (![session.outputs containsObject:_photoOutput]) {
                 if ([session canAddOutput:_photoOutput]) {
                     [session addOutput:_photoOutput];
+                    
+                    _photoOutput.highResolutionCaptureEnabled = YES;
                 } else {
                     if (newError == nil) {
                         newError = [SCRecorder createError:@"Cannot add photoOutput inside the session"];
@@ -286,7 +298,7 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
                 }
             }
         }
-        
+
         [self commitConfiguration];
     }
     _error = newError;
@@ -315,6 +327,17 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
     _previewLayer.session = session;
     
     [self reconfigureVideoInput:YES audioInput:YES];
+    
+    // -- Need to check support after re-configuring inputs
+    
+    _photoOutput.livePhotoCaptureEnabled = _photoOutput.livePhotoCaptureSupported;
+    
+    _livePhotoMode = _photoOutput.livePhotoCaptureSupported ? AVCamLivePhotoModeOn : AVCamLivePhotoModeOff;
+    
+    _inProgressPhotoCaptureDelegates = [NSMutableDictionary dictionary];
+    _inProgressLivePhotoCapturesCount = 0;
+    
+    // --
     
     [self commitConfiguration];
     
@@ -377,35 +400,76 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
     return [self _imageFromSampleBufferHolder:_lastVideoBuffer];
 }
 
-- (void)capturePhoto:(void(^)(NSError*, UIImage*))completionHandler {
-    AVCaptureConnection *connection = [_photoOutput connectionWithMediaType:AVMediaTypeVideo];
-    if (connection != nil) {
-        [_photoOutput captureStillImageAsynchronouslyFromConnection:connection completionHandler:
-         ^(CMSampleBufferRef imageDataSampleBuffer, NSError *error) {
-             
-             if (imageDataSampleBuffer != nil && error == nil) {
-                 NSData *jpegData = [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:imageDataSampleBuffer];
-                 if (jpegData) {
-                     UIImage *image = [UIImage imageWithData:jpegData];
-                     if (completionHandler != nil) {
-                         completionHandler(nil, image);
-                     }
-                 } else {
-                     if (completionHandler != nil) {
-                         completionHandler([SCRecorder createError:@"Failed to create jpeg data"], nil);
-                     }
-                 }
-             } else {
-                 if (completionHandler != nil) {
-                     completionHandler(error, nil);
-                 }
-             }
-         }];
-    } else {
-        if (completionHandler != nil) {
-            completionHandler([SCRecorder createError:@"Camera session not started or Photo disabled"], nil);
+- (void)captureLivePhoto:(void(^)(NSError*, UIImage*, NSURL*))completionHandler {
+    dispatch_async( self.sessionQueue, ^{
+        
+        // Update the photo output's connection to match the video orientation of the video preview layer.
+        AVCaptureConnection *photoOutputConnection = [self.photoOutput connectionWithMediaType:AVMediaTypeVideo];
+        photoOutputConnection.videoOrientation = _videoOrientation;
+        
+        // Capture a JPEG photo with flash set to auto and high resolution photo enabled.
+        AVCapturePhotoSettings *photoSettings = [AVCapturePhotoSettings photoSettings];
+        photoSettings.flashMode = AVCaptureFlashModeAuto;
+        photoSettings.highResolutionPhotoEnabled = YES;
+        if ( photoSettings.availablePreviewPhotoPixelFormatTypes.count > 0 ) {
+            photoSettings.previewPhotoFormat = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : photoSettings.availablePreviewPhotoPixelFormatTypes.firstObject };
         }
-    }
+        if ( _livePhotoMode == AVCamLivePhotoModeOn && _photoOutput.livePhotoCaptureSupported ) { // Live Photo capture is not supported in movie mode.
+            NSString *livePhotoMovieFileName = [NSUUID UUID].UUIDString;
+            NSString *livePhotoMovieFilePath = [NSTemporaryDirectory() stringByAppendingPathComponent:[livePhotoMovieFileName stringByAppendingPathExtension:@"mov"]];
+            photoSettings.livePhotoMovieFileURL = [NSURL fileURLWithPath:livePhotoMovieFilePath];
+        }
+        
+        // Use a separate object for the photo capture delegate to isolate each capture life cycle.
+        AVCamPhotoCaptureDelegate *photoCaptureDelegate = [[AVCamPhotoCaptureDelegate alloc] initWithRequestedPhotoSettings:photoSettings willCapturePhotoAnimation:^{
+            // do some animation here
+            
+        } capturingLivePhoto:^( BOOL capturing ) {
+            /*
+             Because Live Photo captures can overlap, we need to keep track of the
+             number of in progress Live Photo captures to ensure that the
+             Live Photo label stays visible during these captures.
+             */
+            dispatch_async( self.sessionQueue, ^{
+                if ( capturing ) {
+                    _inProgressLivePhotoCapturesCount++;
+                }
+                else {
+                    _inProgressLivePhotoCapturesCount--;
+                }
+                
+                NSInteger inProgressLivePhotoCapturesCount = _inProgressLivePhotoCapturesCount;
+                dispatch_async( dispatch_get_main_queue(), ^{
+                    if ( inProgressLivePhotoCapturesCount > 0 ) {
+                        //                        self.capturingLivePhotoLabel.hidden = NO;
+                    }
+                    else if ( inProgressLivePhotoCapturesCount == 0 ) {
+                        //                        self.capturingLivePhotoLabel.hidden = YES;
+                    }
+                    else {
+                        NSLog( @"Error: In progress live photo capture count is less than 0" );
+                    }
+                } );
+            } );
+        } completed:^( AVCamPhotoCaptureDelegate *photoCaptureDelegate ) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completionHandler(nil, [UIImage imageWithData:photoCaptureDelegate.photoData], photoCaptureDelegate.livePhotoCompanionMovieURL);
+            });
+            
+            // When the capture is complete, remove a reference to the photo capture delegate so it can be deallocated.
+            dispatch_async( self.sessionQueue, ^{
+                _inProgressPhotoCaptureDelegates[@(photoCaptureDelegate.requestedPhotoSettings.uniqueID)] = nil;
+            } );
+        }];
+        
+        /*
+         The Photo Output keeps a weak reference to the photo capture delegate so
+         we store it in an array to maintain a strong reference to this object
+         until the capture is completed.
+         */
+        _inProgressPhotoCaptureDelegates[@(photoCaptureDelegate.requestedPhotoSettings.uniqueID)] = photoCaptureDelegate;
+        [_photoOutput capturePhotoWithSettings:photoSettings delegate:photoCaptureDelegate];
+    } );
 }
 
 - (void)unprepare {
@@ -928,7 +992,7 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
             });
         }
     } else if (context == SCRecorderPhotoOptionsContext) {
-        _photoOutput.outputSettings = [_photoConfiguration createOutputSettings];
+//        _photoOutput.outputSettings = [_photoConfiguration createOutputSettings];
     }
 }
 
@@ -1280,14 +1344,6 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
     return _previewView;
 }
 
-- (NSDictionary*)photoOutputSettings {
-    return _photoOutput.outputSettings;
-}
-
-- (void)setPhotoOutputSettings:(NSDictionary *)photoOutputSettings {
-    _photoOutput.outputSettings = photoOutputSettings;
-}
-
 - (void)setDevice:(AVCaptureDevicePosition)device {
     [self willChangeValueForKey:@"device"];
     
@@ -1564,7 +1620,7 @@ static char* SCRecorderPhotoOptionsContext = "PhotoOptionsContext";
     return _audioOutput;
 }
 
-- (AVCaptureStillImageOutput *)photoOutput {
+- (AVCapturePhotoOutput *)photoOutput {
     return _photoOutput;
 }
 

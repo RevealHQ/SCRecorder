@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8956129E1D78F43000543D92 /* AVCamPhotoCaptureDelegate.h in Headers */ = {isa = PBXBuildFile; fileRef = 8956129C1D78F43000543D92 /* AVCamPhotoCaptureDelegate.h */; };
+		8956129F1D78F43000543D92 /* AVCamPhotoCaptureDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8956129D1D78F43000543D92 /* AVCamPhotoCaptureDelegate.m */; };
 		9079317B1BD2A06700D7D181 /* SCFilter+VideoComposition.h in Headers */ = {isa = PBXBuildFile; fileRef = 907931791BD2A06700D7D181 /* SCFilter+VideoComposition.h */; };
 		9079317C1BD2A06700D7D181 /* SCFilter+VideoComposition.m in Sources */ = {isa = PBXBuildFile; fileRef = 9079317A1BD2A06700D7D181 /* SCFilter+VideoComposition.m */; };
 		9079317F1BD451C200D7D181 /* SCFilter+UIImage.h in Headers */ = {isa = PBXBuildFile; fileRef = 9079317D1BD451C200D7D181 /* SCFilter+UIImage.h */; };
@@ -125,6 +127,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		8956129C1D78F43000543D92 /* AVCamPhotoCaptureDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AVCamPhotoCaptureDelegate.h; sourceTree = "<group>"; };
+		8956129D1D78F43000543D92 /* AVCamPhotoCaptureDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AVCamPhotoCaptureDelegate.m; sourceTree = "<group>"; };
 		907931791BD2A06700D7D181 /* SCFilter+VideoComposition.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "SCFilter+VideoComposition.h"; sourceTree = "<group>"; };
 		9079317A1BD2A06700D7D181 /* SCFilter+VideoComposition.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "SCFilter+VideoComposition.m"; sourceTree = "<group>"; };
 		9079317D1BD451C200D7D181 /* SCFilter+UIImage.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "SCFilter+UIImage.h"; sourceTree = "<group>"; };
@@ -462,6 +466,8 @@
 				DC23C1C51AAF95600013E14C /* SCRecordSessionSegment.h */,
 				DC23C1C61AAF95600013E14C /* SCRecordSessionSegment.m */,
 				DCF3A68E1AB9F4760034CF5C /* SCRecorderDelegate.h */,
+				8956129C1D78F43000543D92 /* AVCamPhotoCaptureDelegate.h */,
+				8956129D1D78F43000543D92 /* AVCamPhotoCaptureDelegate.m */,
 			);
 			name = Recorder;
 			sourceTree = "<group>";
@@ -527,6 +533,7 @@
 				DCF3A68F1AB9F4760034CF5C /* SCRecorderDelegate.h in Headers */,
 				DCB041671924663700D945D2 /* SCAssetExportSession.h in Headers */,
 				DCB04159192458C800D945D2 /* SCImageView.h in Headers */,
+				8956129E1D78F43000543D92 /* AVCamPhotoCaptureDelegate.h in Headers */,
 				DCBA8FE61A92B2FF00DD1A79 /* SCRecorderToolsView.h in Headers */,
 				DC10CF281ACFD458009880C4 /* SCWeakSelectorTarget.h in Headers */,
 				DCEE378A1B17E6480019C7B5 /* SCContext.h in Headers */,
@@ -693,6 +700,7 @@
 				DCB041681924663700D945D2 /* SCAssetExportSession.m in Sources */,
 				DCA163961A2028B800505966 /* SCVideoConfiguration.m in Sources */,
 				DCEE378B1B17E6480019C7B5 /* SCContext.m in Sources */,
+				8956129F1D78F43000543D92 /* AVCamPhotoCaptureDelegate.m in Sources */,
 				DC50285818E51FC0004E833F /* SCRecorder.m in Sources */,
 				DCD12AA01B456C5E0064674D /* SCProcessingQueue.m in Sources */,
 				DCD12AA51B45AA540064674D /* SCIOPixelBuffers.m in Sources */,

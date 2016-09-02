@@ -264,9 +264,9 @@
 @property (readonly, nonatomic) AVCaptureAudioDataOutput *__nullable audioOutput;
 
 /**
- The underlying AVCaptureStillImageOutput
+ The underlying AVCapturePhotoOutput
  */
-@property (readonly, nonatomic) AVCaptureStillImageOutput *__nullable photoOutput;
+@property (readonly, nonatomic) AVCapturePhotoOutput *__nullable photoOutput;
 
 /**
  The dispatch queue that the SCRecorder uses for sending messages to the attached
@@ -403,7 +403,7 @@
  Capture a photo from the camera
  @param completionHandler called on the main queue with the image taken or an error in case of a problem
  */
-- (void)capturePhoto:(void(^ __nonnull)(NSError *__nullable error, UIImage *__nullable image))completionHandler;
+- (void)captureLivePhoto:(void(^ __nonnull)(NSError *__nullable error, UIImage *__nullable image, NSURL *__nullable url))completionHandler;
 
 /**
  Signal to the recorder that the previewView frame has changed.

@@ -359,8 +359,8 @@
 }
 
 - (IBAction)capturePhoto:(id)sender {
-    [_recorder capturePhoto:^(NSError *error, UIImage *image) {
-        if (image != nil) {
+    [_recorder captureLivePhoto:^(NSError *error, UIImage *image, NSURL *url) {
+        if (image != nil && url != nil) {
             [self showPhoto:image];
         } else {
             [self showAlertViewWithTitle:@"Failed to capture photo" message:error.localizedDescription];
