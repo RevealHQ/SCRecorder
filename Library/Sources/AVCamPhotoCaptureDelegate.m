@@ -34,16 +34,7 @@
 }
 
 - (void)didFinish
-{
-	if ( [[NSFileManager defaultManager] fileExistsAtPath:self.livePhotoCompanionMovieURL.path] ) {
-		NSError *error = nil;
-		[[NSFileManager defaultManager] removeItemAtPath:self.livePhotoCompanionMovieURL.path error:&error];
-		
-		if ( error ) {
-			NSLog( @"Could not remove file at url: %@", self.livePhotoCompanionMovieURL.path );
-		}
-	}
-	
+{	
 	self.completed( self );
 }
 
